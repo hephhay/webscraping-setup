@@ -1,17 +1,15 @@
-import csv
-import json
-import os
-import re
 import sys
+import os
+import csv
 import time
-from datetime import date, datetime, timedelta
+import re
+import json
+from datetime import date
 from random import randint
-
+from datetime import datetime, timedelta
 import requests
-
 sys.path.insert(0, os.path.dirname(__file__).replace('global-files','global-files/'))
 from GlobalVariable import *
-
 
 class GlobalFunctions:
 	def createFile(file_name):
@@ -31,19 +29,22 @@ class GlobalFunctions:
 	def get_google_map_url(location, driver):
 		try:
 			google_url_for_location="https://www.google.com/search?q="+location+"&oq="+location+"&num=1"
-			time.sleep(randint(0,3))
 			driver.get(google_url_for_location)
-			# google_map_url=driver.find_element_by_id('lu_map').click()
+			time.sleep(randint(0,3))
 			try:
 				google_map_url=driver.find_element("id",'lu_map').click()
 			except:
 				try:
 					google_map_url=driver.find_element("class name",'Xm7sWb').click()
 				except:
-					google_map_url=driver.find_element("class name",'Lx2b0d').click()
-			time.sleep(1)
-			# google_map_url=driver.current_url
-			# time.sleep(1)
+					try:
+						google_map_url=driver.find_element("class name",'dirs').click()
+					except:
+						try:
+							google_map_url=driver.find_element("class name",'GosL7d cYnjBd').click()
+						except:
+							google_map_url=driver.find_element("class name",'Lx2b0d').click()
+			time.sleep(2)
 			google_map_url=driver.current_url
 			return(google_map_url)
 		except Exception as e:
@@ -53,13 +54,14 @@ class GlobalFunctions:
 	def date_converter(dat):
 		if dat.startswith('-'):
 			dat=dat[1:]
+		dat=dat.replace('&','-').replace(' and ',' - ').replace('ugust','u-g-u-s-t').replace('st','').replace('u-g-u-s-t','ugust').replace('turday','t-u-r-d-a-y').replace('rd','').replace('t-u-r-d-a-y','turday').replace('th','').replace('nday','n-d-a-y').replace('nd','').replace('n-d-a-y','nday').title()
 
 		if any (ele in dat for ele in [date(2000, 5, d).strftime('%a') for d in range(1, 8)]):    
 			da=dat.split('-')
 			datt=[]
 			for d in da:
 				for f in re.findall('[A-Za-z]+',d):
-					for o in ([date(2000, 5, d).strftime('%a') for d in range(1, 8)]+["sday"]):
+					for o in ([date(2000, 5, d).strftime('%a') for d in range(1, 8)]):
 						if o in f:
 							rit=d.replace(f,'').replace('–','').strip().replace('  ',' ')
 							datt.append(rit)
@@ -213,49 +215,118 @@ class GlobalFunctions:
 				date_= [z.strftime('%Y-%m-%d') for z in spl_dt_obj]
 				start_date=date_[0]
 				end_date=date_[1]
+				if start_date>end_date:
+					start_date=str(eval(start_date.split('-',1)[0])-1)+'-'+str(start_date.split('-',1)[-1])
 		return (start_date,end_date)
 
 		
 
 	def price_converter(prices):
+		"""takes in a list of strings containing the prices as input. Examples of the forms it can process are 
+		['60 USD for children','type: USD 5','participants: 800INR',"oleggggggg : free","Advance Prices|Adult: 7$","Advance Prices|Senior Citizen / Registered Disabled:6£"]
+			"""
 		if prices==[] or prices=='':
 			ticket_list=''
 		else:
 			ticket=[]
 			for price in prices:
-				if price=='Free'or price=='free' or 'Free' in price or 'free' in price:
-					ty='free'
-					cu=''
-					am=''
-				elif re.search('[A-Z]{3}\W?\s?\d+',price) or re.search("\\$|\\£|\\€\W*\d+",price):
-					
-					if not re.search('[A-Z]{4,}',price):
-						try:
-							cu=re.search('[A-Z]{3}',price).group()
-						except:
-							cu=re.search("\\$|\\£|\\€",price).group()
+				try:
+					if not regex.search(r"\p{Sc}",price) and not re.search('[A-Z]{3}',price) and not ':' in price and 'ree' not in price:
+						pass
 					else:
-						cu=re.search("\\$|\\£|\\€",price).group()
+						if ':' not in price and not 'ree' in price:
+							ty='paid'
+							try:
+								cu=re.search("\\$|\\£|\\€|\\USD|\\EUR|\\GBP",price).group()
+							except:
+								try:
+									cu=regex.search(r"\p{Sc}",price).group()
+								except:
+									try:
+										cu=re.search('[A-Z]{3}',price).group()
+									except:
+										cu=''
+							am=re.search('\d+\.?\d*',price.split(':')[-1].replace(',','').replace(' ','')).group()
 
-					am=re.search('\d+\.?\d*',price.replace(',','').replace(' ','')).group()
+						elif ':' not in price and 'ree' in price:
+							ty='free'
+							am=''
+							cu=''
+							
+						elif price=='Free'or price=='free' or 'Free' in price or 'free' in price:
+							cu=''
+							am='0'
+							ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
+							if len(ty)<4:
+								ty='free'
+								
+						elif regex.search(r"\p{Sc}\W*\d+",price):
+							try:
+								cu=regex.search(r'\p{Sc}',price).group()
+							except:
+								cu=''
+							am=regex.search('\d+\.?\d*',price.split(':')[-1].replace(',','').replace(' ','')).group()
+							ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
 
-					ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
+							if len(ty)<4:
+								ty='paid'
+								
+						elif re.search("\\$\W*\d+|\\£\W*\d+|\\€\W*\d+",price):
+							try:
+								cu=re.search("\\$|\\£|\\€",price).group()
+							except:
+								cu=''
+							am=re.search('\d+\.?\d*',price.split(':')[-1].replace(',','').replace(' ','')).group()
+							ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
 
-				elif re.search('\d+',price):
-					cu='$'
-					am=re.search('\d+\.?\d*',price.replace(',','').replace(' ','')).group()
-					ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
+							if len(ty)<4:
+								ty='paid'
+								
 
-				else:# price=='Free'or price=='free' or 'Free' in price or 'free' in price:
-					#                     print(price)
-					ty='free'
-					cu=''
-					am=''
-				tic={
-					'type':ty,
-					'price':am,
-					'currency':cu
-				}
-				ticket.append(tic)
+						elif re.search("\\USD|\\EUR|\\GBP",price):
+							try:
+								cu=re.search("\\USD|\\EUR|\\GBP",price).group()
+							except:
+								cu=''
+							am=re.search('\d+\.?\d*',price.split(':')[-1].replace(',','').replace(' ','')).group()
+							ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
+							
+							if len(ty)<4:
+								ty='paid'
+								
+						elif re.search('[A-Z]{3}',price):
+							try:
+								cu=re.search('[A-Z]{3}',price).group()
+							except:
+								cu=''
+							am=re.search('\d+\.?\d*',price.split(':')[-1].replace(',','').replace(' ','')).group()
+
+							ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
+							if len(ty)<4:
+								ty='paid'
+
+						elif re.search('\d+',price):
+							cu='$'
+							am=re.search('\d+\.?\d*',price.replace(',','').replace(' ','')).group()
+							ty=price.split(':')[0].strip().replace(am,'').replace(cu,'').strip()
+							if len(ty)<4:
+								ty='paid'
+
+						else:
+							ty='free'
+							cu=''
+							am=''
+
+						tic={
+							'type':ty,
+							'price':am,
+							'currency':cu
+						}
+						ticket.append(tic)
+				except:
+					continue
+			
 			ticket_list=json.dumps(ticket,ensure_ascii=False)
-		return (ticket_list)
+			if ticket==[]:
+				ticket_list=''
+		return ticket_list
