@@ -77,14 +77,10 @@ warnings.filterwarnings("ignore")
 
 #*******************************************************************************************************************
 def date_transformation(date: str) -> Tuple[str, str]:
-    if '-' in date:
-        start, end = f"{''.join(date.split('-')[0]).strip()} 2022", f"{''.join(date.split('-')[1]).strip()} 2022"
-        start_date, end_date = datetime.strptime(start, '%b %d %Y').strftime('%Y-%m-%d'), datetime.strptime(end, '%b %d %Y').strftime('%Y-%m-%d')
-        return start_date, end_date
-    else:
-        date = f"{date} 2022"
-        date = datetime.strptime(date, '%b %d %Y').strftime('%Y-%m-%d')
-        return date, date
+    match = re.search(r'(\d{1,2})-(\d{1,2})\s*(\w+)\s*(\d{4})', date)
+    if match:
+        change = lambda exact: datetime.strptime(exact, '%d %B %Y').strftime('%Y-%m-%d')
+        match_dat =map(lambda no: change(' '.join(match.group(no, *(3, 4)))), [1, 2])
 #*******************************************************************************************************************
 
 error: str = ''

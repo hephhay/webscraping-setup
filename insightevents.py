@@ -77,14 +77,10 @@ warnings.filterwarnings("ignore")
 
 #*******************************************************************************************************************
 def date_transformation(date: str) -> Tuple[str, str]:
-    if '-' in date:
-        start, end = f"{''.join(date.split('-')[0]).strip()} 2022", f"{''.join(date.split('-')[1]).strip()} 2022"
-        start_date, end_date = datetime.strptime(start, '%b %d %Y').strftime('%Y-%m-%d'), datetime.strptime(end, '%b %d %Y').strftime('%Y-%m-%d')
-        return start_date, end_date
-    else:
-        date = f"{date} 2022"
-        date = datetime.strptime(date, '%b %d %Y').strftime('%Y-%m-%d')
-        return date, date
+    match = re.search(r'(\d{1,2})-(\d{1,2})\s*(\w+)\s*(\d{4})', date)
+    if match:
+        change = lambda exact: datetime.strptime(exact, '%d %B %Y').strftime('%Y-%m-%d')
+        return tuple(map(lambda no: change(' '.join(match.group(no, *(3, 4)))), [1, 2]))
 #*******************************************************************************************************************
 
 error: str = ''
@@ -127,25 +123,28 @@ try:
             "Hanles the teardown of the context manager."
             self.browser.quit()
 
-        def dispatch(self, class_name:str, finder:webdriver = By.CSS_SELECTOR) -> str:
-            "API call for Selenium webdriver.find_element()"
-            return self.browser.find_element(finder, class_name)
+        def dispatch(self, locator:str, strategy:webdriver = By.CSS_SELECTOR) -> str:
+            "API call for selenium.webdriver.remote.webelement.find_element(strategy, locator)"
+            return self.browser.find_element(strategy, locator)
 
-        def dispatchList(self, class_name:str, finder:webdriver = By.CSS_SELECTOR)  -> List:
-            "API call for Selenium webdriver.find_elements()"
-            return self.browser.find_elements(finder, class_name)
+        def dispatchList(self, locator:str, strategy:webdriver = By.CSS_SELECTOR)  -> List:
+            "API call for selenium.webdriver.remote.webelement.find_elements(strategy, locator)"
+            return self.browser.find_elements(strategy, locator)
 
 
         def get_events(self, url: str) -> List[str]:
             "Returns a list of all urls"
-            self.browser.get(url)
             try:
-                all_url = [each.get_attribute('href') for each in self.dispatchList('.event-title a')]
+                self.dispatch('#cookie_action_close_header').click()
+                time.sleep(1)
+                all_url = [each.get_attribute('href') for each in self.dispatchList('.pt-cv-ifield>h4>a')]
+                all_title = [each.text for each in self.dispatchList('.pt-cv-ifield>h4>a')]
+                all_date = map(date_transformation, [each.text for each in self.dispatchList('.pt-cv-ifield .pt-cv-ctf-value>strong')])
             except Exception as e:
                 self.error_msg_from_class += '\n' + str(e)
                 logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
             else:
-                return all_url
+                return list(zip(all_url, all_title, all_date))
 
         def get_dates(self) -> List[Tuple[str, str]]:
             "TScrapes and returns a list of date"
@@ -278,25 +277,24 @@ try:
                 return ''
 
 
-        def event_mode(self, event_name: str) -> Tuple[str, str]:
+        def event_mode(self) -> List[str]:
             "Scrapes and return event venue "
             try:
-                mode_type = self.dispatch('#overview .wpb_wrapper h3').text
-            except NoSuchElementException: mode_type = ''
-            except Exception as e: 
-                self.error_msg_from_class += '\n' + str(e) 
-                logger.error(f'{self.event_mode.__name__} Function failed', exc_info=True)
+                self.dispatch('#cookie_action_close_header').click()
+                time.sleep(1)
+                location = self.dispatchList('.line')[2].text.split(' | ')
+                del location[1]
+            except Exception as e:
+                self.error_msg_from_class += '\n' + str(e)
+                logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
             else:
-                if 'online' in mode_type.lower() or 'webinar' in mode_type.lower() or 'virtual' in mode_type.lower() or 'webinar' in event_name.lower() or 'virtual' in event_name.lower() or 'online' in event_name.lower():  
-                    return 'ONLINE'
-                else:
-                    return ''
+                return location
                     
 
         def contactmail(self) -> json:
             "Scrapes and return a JSONified format of event contact email(s)."
             try:
-                sc_event_contactmail = self.dispatch('email',finder=By.LINK_TEXT).get_attribute('href').replace('mailto:', '').replace('https://pac.org/', '')
+                sc_event_contactmail = self.dispatch('email',strategy=By.LINK_TEXT).get_attribute('href').replace('mailto:', '').replace('https://pac.org/', '')
             except NoSuchElementException: sc_event_contactmail = ''
             except Exception as e: 
                 self.error_msg_from_class += '\n' + str(e) 
@@ -342,19 +340,8 @@ try:
                 curr_tab = self.browser.current_window_handle
                 self.browser.switch_to.new_window('tab')
 
-                self.browser.get('http://google.com')
-                search = self.wait_5sec.until(
-                    EC.presence_of_element_located((By.NAME, 'q')))
+                map_url = GlobalFunctions.get_google_map_url(search_word, self.browser)
 
-                search.send_keys(search_word)
-                search.send_keys(Keys.RETURN)
-
-                map_url = WebDriverWait(self.browser, 3).until(
-                    EC.element_to_be_clickable((By.LINK_TEXT, 'Maps')))
-                map_url.click()
-                time.sleep(0.5)
-                map_url = self.browser.current_url
-            
             except Exception as e:
                 self.error_msg_from_class += '\n' + str(e)
                 logger.error(f'{self.google_map_url.__name__} Function failed', exc_info=True)
@@ -514,7 +501,7 @@ try:
                     else:
                         sc_search_word = f'{venue} {city}'
                         gg_map = handler.google_map_url(sc_search_word)
-                        googlePlaceUrl = gg_map
+                        googlePlaceUrl = gg_map[0]
                 except Exception as e:
                     error += '\n' + str(e)
                     logger.error(f'{handler.google_map_url.__name__} Function failed', exc_info=True)
