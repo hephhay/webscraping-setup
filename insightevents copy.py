@@ -28,7 +28,6 @@ from selenium.webdriver.remote.webdriver import WebDriver
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
-import regex
 
 #*******************************************************************************************************************
 sys.path.insert(
@@ -103,7 +102,7 @@ try:
     options = webdriver.ChromeOptions()
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--ignore-ssl-errors')
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     #options.add_argument("--window-size=1920,1080")
@@ -187,13 +186,12 @@ try:
                 sc_event_info = self.dispatch('.fusion-title-1').text 
             except Exception as e:
                 try:
-                    sc_event_info = self.dispatch('#ut_inner_column_6380cbc8c88fb p').text
-                    sc_event_info = re.findall(r'([^\?]+\?)', sc_event_info)
+                    print('in here')
+                    sc_event_info = self.dispatch('#ut_inner_column_637dff8bde2f0 p').text
+                    return re.search(r'([^\?]+\?)', sc_event_info).group(1)
                 except:
                     self.error_msg_from_class += '\n' + str(e)
                     logger.exception(f'{self.event_info.__name__} Function failed')
-                else:
-                    return sc_event_info[0]
             else:
                 return sc_event_info
 
@@ -203,6 +201,8 @@ try:
             try:
                 price_t_1 = self.dispatch(".fusion-text tbody .row-1 .column-2").text
                 price_v_1 = self.dispatch(".fusion-text tbody .row-2 .column-2").text.split(' ')
+                price_t_2 = self.dispatch(".fusion-text tbody .row-1 .column-3").text
+                price_v_2 = self.dispatch(".fusion-text tbody .row-2 .column-3").text.split(' ')
             except Exception as e:
                 try:
                     price_t_1 = self.dispatch(".row-2 .column-1").text
@@ -218,7 +218,8 @@ try:
                     {'type':price_t_2, 'price':price_v_2[0], 'currency': price_v_2[1]}]
             else:
                 return [
-                    {'type':price_t_1, 'price':price_v_1[0], 'currency':price_v_1[1]}]
+                    {'type':price_t_1, 'price':price_v_1[0], 'currency':price_v_1[1]},
+                    {'type':price_t_2, 'price':price_v_2[0], 'currency': price_v_2[1]}]
 
         def event_mode(self) -> List[str]:
             "Scrapes and return event venue "
@@ -226,12 +227,12 @@ try:
                 location = self.dispatch(".link-type-text>.content-container p").text.split('\n')
             except Exception as e:
                 try:
-                    location = self.dispatch("#slider-1-slide-1-layer-1").text.split(' | ')[1]
+                    pass
                 except:
                     self.error_msg_from_class += '\n' + str(e)
                     logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
                 else:
-                    return ['', '', location]
+                    return ''
             else:
                 return location
                     
@@ -239,35 +240,35 @@ try:
         def contactmail(self) -> json:
             "Scrapes and return a JSONified format of event contact email(s)."
             try:
-                soup = bs(self.browser.page_source,'lxml')
-                rex=r"""(?:[a-z0-9!#$%&'+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'+/=?^_`{|}~-]+)|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])")@(?:(?:[a-z0-9](?:[a-z0-9-][a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-][a-z0-9])?|\[(?:(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9]))\.){3}(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9])|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])"""
-                ma=[regex.search(rex,fxc).group() for fxc in ' '.join(soup.body.get_text(separator=' ').split()).lower().split() if regex.search(rex,fxc) != None]
-                mal=[dc[:-1] if dc.endswith('.') else dc for dc in ma]
-                con = list(dict.fromkeys(mal+ ['info@insightevents.se']))
-                if con==[] or con=='':
-                    con=['info@insightevents.se']
-            except:
-                con = ['info@insightevents.se']
-            return con
+                contact_email = list(map(lambda e: e.text, self.dispatchList('.fusion-fullwidth.hundred-percent-fullwidth .fusion-one-third.fusion-column-last .fusion-text')))
+                container = '\n'.join(contact_email).split('\n')
+                filter_for_email = lambda var: '@' in var
+                email_list = [mail.replace('Epost: ', '').replace('E-post: ', '') for mail in tuple(filter(filter_for_email, container))]
+                if email_list == []:
+                    raise IndexError()
+            except Exception as e:
+                try:
+                    contact_email = self.dispatchList('#ut-row-6380cbca1a738 a')
+                    contact_email = map(lambda e: e.text, contact_email)
+                    contact_email = list(filter(lambda x: x != '', contact_email))
+                except:
+                    self.error_msg_from_class += '\n' + str(e)
+                    logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
+                else:
+                    return json.dumps(contact_email, ensure_ascii=False)
+            else:
+                return json.dumps(email_list, ensure_ascii=False)
 
         def event_speakerlist(self) -> json:
             "Scrapes and return a JSONified format of event speaker_list."
             try:
                 speaker_list = list(map(split_names, self.dispatchList('.fusion-one-fourth p[style="text-align: center;"]')))
                 speaker_list = speaker_list[1:]
-                if speaker_list == []:
-                    raise IndexError
             except Exception as e:
-                try:
-                    speaker_list = list(map(split_names, self.dispatchList('.bklyn-team-member-info')))
-                except Exception as e:
-                    self.error_msg_from_class += '\n' + str(e)
-                    logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
-                else:
-                    return list(map(lambda a: {'name':a[0], 'title': a[1], 'link': ''}, speaker_list))
+                self.error_msg_from_class += '\n' + str(e)
+                logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
             else:
-                return list(map(lambda a: {'name':a[0], 'title': a[1], 'link': ''}, speaker_list))
- 
+                return list(map(lambda a: {'name':a[0], 'title': a[1]}, speaker_list))
 
 
         def google_map_url(self, search_word: str) -> str:
@@ -309,8 +310,8 @@ try:
     # second part
         for i in all_events:
 
-            # if i[0] == 'https://insightevents.se/events/battery-tech-for-ev/':
-            #     continue
+            if i[0] == 'https://insightevents.se/events/battery-tech-for-ev/':
+                continue
             try:
                 try:
                     handler.get_event(i[0])
@@ -474,8 +475,10 @@ try:
                 GlobalFunctions.appendRow(file_name, data_row)
 
             except Exception as e:
+                print(e)
                 error += '\n' + str(e) + handler.error_msg_from_class
                 logger.error('failed', exc_info=True)
+                print('get here sometimes too')
                 continue
 
 except Exception as e:
