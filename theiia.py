@@ -104,7 +104,7 @@ def get_date_range(date_str):
 
 def get_price(price_s):
     if price_s == '':
-        return '[]'
+        return ''
     p_s = price_s.split(' - ')
     return json.dumps(
         list(map(lambda x: {'type': 'paid', 'price': x[1:], 'currency': x[0]}, p_s)),
@@ -113,7 +113,7 @@ def get_price(price_s):
 
 def f_time(time_s):
     if time_s == '':
-        return '[]'
+        return ''
     t_r = re.search(r'(\d{1,2}(?:.\d{1,2})?\s*[AaMPm]{2})\s*.+?\s*(\d{1,2}(?:.\d{1,2})?\s*[aMPAm]{2})\s*([a-zA-Z]{2,3})', time_s)
     t_s, t_e, t_z = tuple(map(lambda x: x.replace(' ', ''), t_r.groups()))
     return json.dumps([{'type':'paid', 'start_time':t_s, 'end_time':t_e, 'timezone':t_z, 'days':'all'}], ensure_ascii = False)
@@ -139,6 +139,8 @@ try:
     options.add_argument('--ignore-certificate-errors')
     options.add_argument('--ignore-ssl-errors')
     options.add_argument("--headless")
+    prefs = {"profile.managed_default_content_settings.images": 2}
+    options.add_experimental_option("prefs", prefs)
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     #options.add_argument("--window-size=1920,1080")
@@ -178,6 +180,10 @@ try:
         def get_events(self, url: str) -> List[str]:
             "Returns a list of all urls"
             try:
+                self.browser.get(url)
+            except:
+                pass
+            try:
                 all_url = [each.get_attribute('href') for each in self.dispatchList('.details>a')]
                 all_title = [each.text for each in self.dispatchList('.details>a')]
             except Exception as e:
@@ -186,23 +192,10 @@ try:
             else:
                 return list(zip(all_url, all_title))
 
-        def get_dates(self) -> List[Tuple[str, str]]:
-            "TScrapes and returns a list of date"
-            try:
-                all_dates = [each.text for each in self.dispatchList('.event-date')]
-            except Exception as e:
-                self.error_msg_from_class += '\n' + str(e)
-                logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
-            else:
-                return list(map(date_transformation, all_dates))
-        
-
         def get_event(self, url: str) -> NoReturn:
             "Get a singualr event from a list of all events"
             try:
                 self.browser.get(url)
-                time.sleep(1)
-                self.dispatch('#cookie_action_close_header').click()
             except Exception as e:
                 self.error_msg_from_class += '\n' + str(e)
                 logger.error(f'{self.get_event.__name__} Function failed', exc_info=True)
@@ -216,40 +209,48 @@ try:
                 "$('.details').map(function() {"\
                 "child_list = $(this).children();"\
                 "child_length = child_list.length;"\
-                "info = $('.article-detail p').first().text();"\
                 "switch (child_length) {"\
                 "    case 3 :{"\
+                "        info = document.evaluate('/html/body/main/section[1]/div/article/text()[3]', document, null, XPathResult.STRING_TYPE, null).stringValue.trim();"\
                 "        date_str = '';"\
                 "        price_str = $(child_list[1]).text();"\
                 "        time_str = '';"\
                 "        virtual = 1;"\
                 "        venue = '';"\
-                "        city = '';"\
-                "        state = '';"\
+                "        metro = '';"\
+                "        break;"\
+                "    }"\
+                "    case 4 :{"\
+                "        info = $('.article-detail p').first().text();"\
+                "        date_str = $(child_list[0]).text();"\
+                "        price_str = $(child_list[2]).text();"\
+                "        time_str = $($(child_list[1]).children()[1]).html();"\
+                "        virtual = 1;"\
+                "        venue = '';"\
+                "        metro = '';"\
                 "        break;"\
                 "    }"\
                 "    case 5 :{"\
+                "        info = $('.article-detail p').first().text();"\
                 "        date_str = $(child_list[0]).text();"\
                 "        price_str = $(child_list[3]).text();"\
                 "        time_str = $($(child_list[1]).children()[1]).html();"\
                 "        virtual = 1;"\
                 "        venue = '';"\
-                "        city = '';"\
-                "        state = '';"\
+                "        metro = '';"\
                 "        break;"\
                 "    }"\
                 "    default :{"\
+                "        info = $('.article-detail p').first().text();"\
                 "        date_str = $(child_list[0]).text();"\
                 "        price_str = $(child_list[4]).text();"\
                 "        time_str = $($(child_list[1]).children()[1]).html();"\
                 "        virtual = 0;"\
                 "        venue = $(child_list[3]).text();"\
-                "        metro = $(child_list[2]).text().split(' , ');"\
-                "        city = metro[0];"\
-                "        state = metro[1];"\
+                "        metro = $(child_list[2]).text();"\
                 "    }"\
                 "}"\
-                "return [[info, date_str, price_str, time_str, virtual, venue, city, state]];"\
+                "return [[info, date_str, price_str, time_str, virtual, venue, metro]];"\
                 "});"
                 )
                 page_prop = map(manipVals, page_prop)
@@ -258,7 +259,6 @@ try:
                 logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
             else:
                 return list(page_prop)
-
 
         def event_ticket_list(self) -> json:
             "Scrapes and return a JSONified format of event timing."
@@ -305,11 +305,11 @@ try:
                 rex=r"""(?:[a-z0-9!#$%&'+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'+/=?^_`{|}~-]+)|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])")@(?:(?:[a-z0-9](?:[a-z0-9-][a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-][a-z0-9])?|\[(?:(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9]))\.){3}(?:(2(5[0-5]|[0-4][0-9])|1[0-9][0-9]|[1-9]?[0-9])|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])"""
                 ma=[regex.search(rex,fxc).group() for fxc in ' '.join(soup.body.get_text(separator=' ').split()).lower().split() if regex.search(rex,fxc) != None]
                 mal=[dc[:-1] if dc.endswith('.') else dc for dc in ma]
-                con = list(dict.fromkeys(mal+ ['info@insightevents.se']))
+                con = list(dict.fromkeys(mal+ ['CustomerRelations@theiia.org']))
                 if con==[] or con=='':
-                    con=['info@insightevents.se']
+                    con=['CustomerRelations@theiia.org']
             except:
-                con = ['info@insightevents.se']
+                con = ['CustomerRelations@theiia.org']
             return con
 
         def event_speakerlist(self) -> json:
@@ -329,8 +329,6 @@ try:
                     return list(map(lambda a: {'name':a[0], 'title': a[1], 'link': ''}, speaker_list))
             else:
                 return list(map(lambda a: {'name':a[0], 'title': a[1], 'link': ''}, speaker_list))
- 
-
 
         def google_map_url(self, search_word: str) -> str:
             """
@@ -356,7 +354,7 @@ try:
                 return map_url
 
 
-    base_url = 'https://insightevents.se/events/'
+    base_url = 'https://www.theiia.org/en/search/course-search/?page=1&rpp=500'
 
     with ScrapeEvent() as handler:
         " This context manager handles the ScrapeEvent() Class object and handles it teardown for any resource(s) used."
@@ -376,7 +374,6 @@ try:
             try:
                 try:
                     handler.get_event(i[0])
-                    time.sleep(1)
                 except Exception as e:
                     error += '\n' + str(e)
                     logger.error(f'{handler.get_event.__name__} Function failed', exc_info=True)
@@ -393,147 +390,134 @@ try:
                     eventname = ''
 
                 # 3 & 4 BLOCK CODE: scraping attribute startdate and enddate
-                try:
-                    startdate = i[2][0]
-                    enddate = i[2][1]
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.event_date.__name__} Function failed', exc_info=True)
-                    startdate = ''
-                    enddate = ''
+                scrappedInfo = handler.event_info()
+                for line_data in scrappedInfo:
+                    try:
+                        startdate = line_data[1][0]
+                        enddate = line_data[1][0]
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.event_date.__name__} Function failed', exc_info=True)
+                        startdate = ''
+                        enddate = ''
+                    
                 
-            
-                # 5 BLOCK CODE: scraping attribute timing
-                try:
-                    timing =''
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.event_timing.__name__} Function failed', exc_info=True)
-                    timing = ''
+                    # 5 BLOCK CODE: scraping attribute timing
+                    try:
+                        timing = line_data[3]
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.event_timing.__name__} Function failed', exc_info=True)
+                        timing = ''
 
 
-                # 6 BLOCK CODE: scraping attribute event_info
-                try:
-                    eventinfo = handler.event_info()
-                    if not eventinfo:
-                        eventinfo = f'Theme: {eventname.title()} + {startdate} - {enddate}'
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.event_info.__name__} Function failed', exc_info=True)
-                    eventinfo = ''
+                    # 6 BLOCK CODE: scraping attribute event_info
+                    try:
+                        eventinfo = line_data[0].strip().replace('\n', ' ')
+                        if not eventinfo:
+                            eventinfo = f'Theme: {eventname.title()} + {startdate} - {enddate}'
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.event_info.__name__} Function failed', exc_info=True)
+                        eventinfo = ''
 
 
-                # 7 BLOCK CODE: scraping attribute ticketlist
-                try:
-                    ticketlist = handler.event_ticket_list()
-                    if ticketlist:
-                        ticketlist = json.dumps(ticketlist, ensure_ascii=False)
-                    else: ticketlist = ''
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.event_ticket_list.__name__} Function failed', exc_info=True)
-                    ticketlist = ''
+                    # 7 BLOCK CODE: scraping attribute ticketlist
+                    try:
+                        ticketlist = line_data[2]
+                        if ticketlist:
+                            pass
+                        else: ticketlist = ''
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.event_ticket_list.__name__} Function failed', exc_info=True)
+                        ticketlist = ''
 
-                # 8 BLOCK CODE: scraping attribute orgProfile
-                orgProfile = 'Insight Events Sweden AB (tidigare Informa IBC Sweden) startade sin verksamhet 1994 och genomför årligen ett flertal mässor, konferenser, kurser och utbildningar på den svenska marknaden. Våra tusentals deltagare är beslutsfattare från både privata näringslivet och offentlig sektor. Målsättningen är att ge våra deltagare ny och utvecklande kunskap med de mest kända experterna inom respektive område. Våra produkter erbjuder också möjlighet att personligen möta potentiella kunder och knyta nya affärskontakter.'
+                    # 8 BLOCK CODE: scraping attribute orgProfile
+                    orgProfile = "Established in 1941, The Institute of Internal Auditors (IIA) is an international professional association with global headquarters in Lake Mary, Florida, USA. The IIA is the internal audit profession's leader in standards, certification, education, research, and technical guidance throughout the world. Generally, members work in internal auditing, risk management, governance, internal control, information technology audit, education, and security."
 
-                # 9 BLOCK CODE: scraping attribute orgName
-                orgName = 'Insight Events'
+                    # 9 BLOCK CODE: scraping attribute orgName
+                    orgName = 'theiia'
 
-                # 10 BLOCK CODE: scraping attribute orgWeb
-                orgWeb = 'https://insightevents.se/'
+                    # 10 BLOCK CODE: scraping attribute orgWeb
+                    orgWeb = 'https://www.theiia.org/en/'
 
-                # 11 BLOCK CODE: scraping attribute logo
-                logo = ''
+                    # 11 BLOCK CODE: scraping attribute logo
+                    logo = ''
 
-                # 12 BLOCK CODE: scraping attribute sponsor
-                sponsor = ''
+                    # 12 BLOCK CODE: scraping attribute sponsor
+                    sponsor = ''
 
-                # 13 BLOCK CODE: scraping attribute agendalist
-                agendalist = ''
+                    # 13 BLOCK CODE: scraping attribute agendalist
+                    agendalist = ''
 
-                #14 BLOCK CODE: scraping attribute type
-                type = ''
-                #15 BLOCK CODE: scraping attribute category
-                category = ''
+                    #14 BLOCK CODE: scraping attribute type
+                    type = ''
+                    #15 BLOCK CODE: scraping attribute category
+                    category = ''
 
-                try:
-                    mode = handler.event_mode()
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.event_mode.__name__} Function failed', exc_info=True)
+                    try:
+                        mode = ''
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.event_mode.__name__} Function failed', exc_info=True)
 
-                # 16, 17 & 18 BLOCK CODE: scraping attribute city, country, venue
-                try:
-                    if isinstance(mode, (tuple, list)):
-                        venue = f'{mode[0]} {mode[1]}'
-                        city = mode[2]
+                    # 16, 17 & 18 BLOCK CODE: scraping attribute city, country, venue
+                    try:
+                        venue = line_data[5]
+                        city = line_data[6]
                         country = ''
-                    elif isinstance(mode, str):
-                        if mode == 'ONLINE':
-                            venue = ''
-                            city = ''
-                            country = ''
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.event_mode.__name__} Function failed', exc_info=True)
-                    venue = ''
-                    city = ''
-                    country = ''
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.event_mode.__name__} Function failed', exc_info=True)
+                        venue = ''
+                        city = ''
+                        country = ''
 
+                    # 19 BLOCK CODE: scraping attribute event_website
+                    event_website = scrappedUrl
 
-                # 19 BLOCK CODE: scraping attribute event_website
-                event_website = scrappedUrl
-
-                # 20 BLOCK CODE: scraping attribute googlePlaceUrl
-                try:
-                    if venue:
-                        sc_search_word = f'{venue}'
-                        googlePlaceUrl = handler.google_map_url(sc_search_word)
-                    else:
+                    # 20 BLOCK CODE: scraping attribute googlePlaceUrl
+                    try:
+                        if venue:
+                            sc_search_word = f'{venue}'
+                            googlePlaceUrl = handler.google_map_url(sc_search_word)
+                        else:
+                            googlePlaceUrl = ''
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.google_map_url.__name__} Function failed', exc_info=True)
                         googlePlaceUrl = ''
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.google_map_url.__name__} Function failed', exc_info=True)
-                    googlePlaceUrl = ''
 
-                # 21 BLOCK CODE: scraping attribute ContactMail
-                try:
-                    ContactMail = handler.contactmail()
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.contactmail.__name__} Function failed', exc_info=True)
-                    ContactMail = ''
+                    # 21 BLOCK CODE: scraping attribute ContactMail
+                    try:
+                        ContactMail = handler.contactmail()
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.contactmail.__name__} Function failed', exc_info=True)
+                        ContactMail = ''
 
-                # 22 BLOCK CODE: scraping attribute Speakerlist
-                try:
-                    Speakerlist = handler.event_speakerlist()
-                    Speakerlist = json.dumps(Speakerlist, ensure_ascii=False)
-                    if Speakerlist is None:
+                    # 22 BLOCK CODE: scraping attribute Speakerlist
+                    try:
+                        Speakerlist = '[]'
+                        if Speakerlist is None:
+                            Speakerlist = ''
+                    except Exception as e:
+                        error += '\n' + str(e)
+                        logger.error(f'{handler.event_speakerlist.__name__} Function failed', exc_info=True)
                         Speakerlist = ''
-                except Exception as e:
-                    error += '\n' + str(e)
-                    logger.error(f'{handler.event_speakerlist.__name__} Function failed', exc_info=True)
-                    Speakerlist = ''
 
-                # 23 BLOCK CODE: scraping attribute online_event
-                try:
-                    if (venue or city):
-                        online_event = 0
-                    else:
-                        online_event = 1
-                except Exception as e:
-                    error += '\n' + str(e)
-                    online_event = ''
+                    # 23 BLOCK CODE: scraping attribute online_event
+                    online_event = line_data[4]
 
-                data_row = [
-                    scrappedUrl, eventname, startdate, enddate, timing,
-                    eventinfo, ticketlist, orgProfile, orgName, orgWeb,
-                    logo, sponsor, agendalist, type, category, city,
-                    country, venue, event_website, googlePlaceUrl,
-                    ContactMail, Speakerlist, online_event]
+                    data_row = [
+                        scrappedUrl, eventname, startdate, enddate, timing,
+                        eventinfo, ticketlist, orgProfile, orgName, orgWeb,
+                        logo, sponsor, agendalist, type, category, city,
+                        country, venue, event_website, googlePlaceUrl,
+                        ContactMail, Speakerlist, online_event]
 
-                GlobalFunctions.appendRow(file_name, data_row)
+                    GlobalFunctions.appendRow(file_name, data_row)
 
             except Exception as e:
                 error += '\n' + str(e) + handler.error_msg_from_class
