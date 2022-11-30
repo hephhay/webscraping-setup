@@ -3,14 +3,12 @@
 @author: ChewingGumKing_OJF
 """
 import json
-import logging
 import os
 import re
 import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from logging import Logger
 from random import randint
 from typing import Any, Dict, List, NoReturn, Optional, Tuple, Union
 
@@ -35,40 +33,9 @@ sys.path.insert(
     0,
     os.path.dirname(__file__).replace('parsing-new-script', 'global-files/'))
 
-#*******************************************************************************************************************
-
-def creating_log(script_name: str, log_folder_path: Optional[str] = None):
-    """ 
-    Implements the logging module and returns the logger object. 
-    Takes a string positional parameter for log file name and a keyword parameter for log file path. 
-    Default log file path folder 'log_folder' and each code run clears the last log.
-    """
-
-    if not log_folder_path:
-        log_folder_path: str = 'log_folder'
-
-    if os.path.exists(log_folder_path):
-        for files in os.listdir(log_folder_path):
-            if files == f'{os.path.basename(__file__)}.log':
-                os.remove(os.path.join(os.getcwd(), log_folder_path, files))
-    else:
-        os.makedirs(log_folder_path)
-
-    log_path = os.path.join(os.getcwd(), log_folder_path, f'{script_name}.log')
-
-    logger: Logger = logging.getLogger(script_name)
-    logger.setLevel(logging.DEBUG)
-    log_handler = logging.FileHandler(log_path)
-    log_format = logging.Formatter(
-        '\n %(asctime)s -- %(name)s -- %(levelname)s -- %(message)s \n')
-    log_handler.setFormatter(log_format)
-    logger.addHandler(log_handler)
-    logger.info('Log reporting is instantiated.')
-
-    return logger
 
 
-logger = creating_log(f'{os.path.basename(__file__)}')
+
 #*******************************************************************************************************************
 import warnings
 
@@ -107,7 +74,7 @@ def get_price(price_s):
         return ''
     p_s = price_s.split(' - ')
     return json.dumps(
-        list(map(lambda x: {'type': 'paid', 'price': x[1:], 'currency': x[0]}, p_s)),
+        list(map(lambda x: {'type': 'paid', 'price': x[1:].replace(',', ''), 'currency': x[0].replace(',', '')}, p_s)),
         ensure_ascii=False
     )
 
@@ -116,7 +83,7 @@ def f_time(time_s):
         return ''
     t_r = re.search(r'(\d{1,2}(?:.\d{1,2})?\s*[AaMPm]{2})\s*.+?\s*(\d{1,2}(?:.\d{1,2})?\s*[aMPAm]{2})\s*([a-zA-Z]{2,3})', time_s)
     t_s, t_e, t_z = tuple(map(lambda x: x.replace(' ', ''), t_r.groups()))
-    return json.dumps([{'type':'paid', 'start_time':t_s, 'end_time':t_e, 'timezone':t_z, 'days':'all'}], ensure_ascii = False)
+    return json.dumps([{'type':'general', 'start_time':t_s, 'end_time':t_e, 'timezone':t_z, 'days':'all'}], ensure_ascii = False)
 
 
 def manipVals(val):
@@ -188,7 +155,6 @@ try:
                 all_title = [each.text for each in self.dispatchList('.details>a')]
             except Exception as e:
                 self.error_msg_from_class += '\n' + str(e)
-                logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
             else:
                 return list(zip(all_url, all_title))
 
@@ -198,7 +164,6 @@ try:
                 self.browser.get(url)
             except Exception as e:
                 self.error_msg_from_class += '\n' + str(e)
-                logger.error(f'{self.get_event.__name__} Function failed', exc_info=True)
             
         
         
@@ -247,7 +212,7 @@ try:
                 "        time_str = $($(child_list[1]).children()[1]).html();"\
                 "        virtual = 0;"\
                 "        venue = $(child_list[3]).text();"\
-                "        metro = $(child_list[2]).text();"\
+                "        metro = $(child_list[2]).text().split(',')[0];"\
                 "    }"\
                 "}"\
                 "return [[info, date_str, price_str, time_str, virtual, venue, metro]];"\
@@ -256,7 +221,6 @@ try:
                 page_prop = map(manipVals, page_prop)
             except Exception as e:
                 self.error_msg_from_class += '\n' + str(e)
-                logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
             else:
                 return list(page_prop)
 
@@ -273,7 +237,6 @@ try:
                     price_v_2 = self.dispatch(".row-3 .column-2").text.split(' ')
                 except:
                     self.error_msg_from_class += '\n' + str(e)
-                    logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
                 else:
                     return [
                     {'type':price_t_1, 'price':price_v_1[0], 'currency':price_v_1[1]},
@@ -291,7 +254,6 @@ try:
                     location = self.dispatch("#slider-1-slide-1-layer-1").text.split(' | ')[1]
                 except:
                     self.error_msg_from_class += '\n' + str(e)
-                    logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
                 else:
                     return ['', '', location]
             else:
@@ -324,7 +286,6 @@ try:
                     speaker_list = list(map(split_names, self.dispatchList('.bklyn-team-member-info')))
                 except Exception as e:
                     self.error_msg_from_class += '\n' + str(e)
-                    logger.error(f'{self.get_events.__name__} Function failed', exc_info=True)
                 else:
                     return list(map(lambda a: {'name':a[0], 'title': a[1], 'link': ''}, speaker_list))
             else:
@@ -346,7 +307,6 @@ try:
 
             except Exception as e:
                 self.error_msg_from_class += '\n' + str(e)
-                logger.error(f'{self.google_map_url.__name__} Function failed', exc_info=True)
 
             else:
                 self.browser.close()
@@ -363,7 +323,6 @@ try:
             all_events = handler.get_events(base_url)
         except NoSuchElementException or TimeoutException or Exception as e:
             error += '\n' + str(e)
-            logger.exception(f'{handler.get_events.__name__} Function failed')
     # end of first part
 
     # second part
@@ -376,7 +335,6 @@ try:
                     handler.get_event(i[0])
                 except Exception as e:
                     error += '\n' + str(e)
-                    logger.error(f'{handler.get_event.__name__} Function failed', exc_info=True)
 
                 # 1 BLOCK CODE: scraping attribute scrappedUrl
                 scrappedUrl = handler.browser.current_url
@@ -386,7 +344,6 @@ try:
                     eventname = i[1]
                 except Exception as e:
                     error += '\n' + str(e)
-                    logger.error(f'{handler.eventname.__name__} Function failed', exc_info=True)
                     eventname = ''
 
                 # 3 & 4 BLOCK CODE: scraping attribute startdate and enddate
@@ -397,7 +354,6 @@ try:
                         enddate = line_data[1][0]
                     except Exception as e:
                         error += '\n' + str(e)
-                        logger.error(f'{handler.event_date.__name__} Function failed', exc_info=True)
                         startdate = ''
                         enddate = ''
                     
@@ -406,8 +362,7 @@ try:
                     try:
                         timing = line_data[3]
                     except Exception as e:
-                        error += '\n' + str(e)
-                        logger.error(f'{handler.event_timing.__name__} Function failed', exc_info=True)
+                        error += '\n' + str(e).replace(',', '')
                         timing = ''
 
 
@@ -418,7 +373,6 @@ try:
                             eventinfo = f'Theme: {eventname.title()} + {startdate} - {enddate}'
                     except Exception as e:
                         error += '\n' + str(e)
-                        logger.error(f'{handler.event_info.__name__} Function failed', exc_info=True)
                         eventinfo = ''
 
 
@@ -430,7 +384,6 @@ try:
                         else: ticketlist = ''
                     except Exception as e:
                         error += '\n' + str(e)
-                        logger.error(f'{handler.event_ticket_list.__name__} Function failed', exc_info=True)
                         ticketlist = ''
 
                     # 8 BLOCK CODE: scraping attribute orgProfile
@@ -460,7 +413,6 @@ try:
                         mode = ''
                     except Exception as e:
                         error += '\n' + str(e)
-                        logger.error(f'{handler.event_mode.__name__} Function failed', exc_info=True)
 
                     # 16, 17 & 18 BLOCK CODE: scraping attribute city, country, venue
                     try:
@@ -469,7 +421,6 @@ try:
                         country = ''
                     except Exception as e:
                         error += '\n' + str(e)
-                        logger.error(f'{handler.event_mode.__name__} Function failed', exc_info=True)
                         venue = ''
                         city = ''
                         country = ''
@@ -486,26 +437,17 @@ try:
                             googlePlaceUrl = ''
                     except Exception as e:
                         error += '\n' + str(e)
-                        logger.error(f'{handler.google_map_url.__name__} Function failed', exc_info=True)
                         googlePlaceUrl = ''
 
                     # 21 BLOCK CODE: scraping attribute ContactMail
                     try:
-                        ContactMail = handler.contactmail()
+                        ContactMail = json.dumps(handler.contactmail(), ensure_ascii=False)
                     except Exception as e:
                         error += '\n' + str(e)
-                        logger.error(f'{handler.contactmail.__name__} Function failed', exc_info=True)
                         ContactMail = ''
 
                     # 22 BLOCK CODE: scraping attribute Speakerlist
-                    try:
-                        Speakerlist = '[]'
-                        if Speakerlist is None:
-                            Speakerlist = ''
-                    except Exception as e:
-                        error += '\n' + str(e)
-                        logger.error(f'{handler.event_speakerlist.__name__} Function failed', exc_info=True)
-                        Speakerlist = ''
+                    Speakerlist = ''
 
                     # 23 BLOCK CODE: scraping attribute online_event
                     online_event = line_data[4]
@@ -521,12 +463,10 @@ try:
 
             except Exception as e:
                 error += '\n' + str(e) + handler.error_msg_from_class
-                logger.error('failed', exc_info=True)
                 continue
 
 except Exception as e:
     error += '\n' + str(e)
-    logger.error('failed', exc_info=True)
     print(error)
 
 #to save status
